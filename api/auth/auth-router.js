@@ -2,8 +2,12 @@
 // middleware functions from `auth-middleware.js`. You will need them here!
 const express = require("express")
 const router = express.Router()
+const bcrypt = require("bcryptjs")
+
 const Users = require("../users/users-model")
-const { checkUsernameFree, checkUsernameExists, checkPasswordLength } = require("./auth-middleware")
+const { checkUsernameFree, 
+        checkUsernameExists, 
+        checkPasswordLength } = require("./auth-middleware")
 
 /**
   1 [POST] /api/auth/register { "username": "sue", "password": "1234" }
@@ -28,9 +32,13 @@ const { checkUsernameFree, checkUsernameExists, checkPasswordLength } = require(
   }
  */
 router.post("/register", checkUsernameFree, checkPasswordLength, (req, res, next) => {
-  Users.add(req.body)
+  const {user_id, username, password }= req.body
+  const hash = bcrypt.hashSync(password, 8)
+
+
+  Users.add({username,password: hash})
     .then(user => {
-      res.status(201).json(user[0])
+      res.status(201).json(user)
     })
     .catch(next)
 })
@@ -51,11 +59,12 @@ router.post("/register", checkUsernameFree, checkPasswordLength, (req, res, next
   }
  */
 router.post("/login", checkUsernameExists, (req, res, next) => {
-  if(req.body.password === req.user.password) {
+  const {password} = req.body
+  if(bcrypt.compareSync(password, req.user.password)) {
     req.session.user = req.user
-    res.json({ message: `Welcome ${req.user.username}!` })
+    res.json({message: `Welcome ${req.user.username}!`})
   } else {
-    next({ status: 401, message: "Invalid credentials" })
+    next({status: 401, message: "Invalid credentials"})
   }
 })
 
@@ -74,11 +83,11 @@ router.post("/login", checkUsernameExists, (req, res, next) => {
     "message": "no session"
   }
  */
-router.get("/logout", (req, res) => {
+router.get("/logout", (req, res, next) => {
   if(req.session.user) {
     req.session.destroy(err => {
       if(err) {
-        res.json({ message: "you can checkout any time you like, but you can never leave" })
+        next(err)
       } else {
         res.json({ message: "logged out" })
       }
